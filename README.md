@@ -2,6 +2,8 @@
 
 Detects when your Kubernetes cluster no longer matches your Git manifests — and optionally fixes it automatically.
 
+![Dashboard showing 2 drifted resources — ConfigMap LOG_LEVEL and Deployment image tag](docs/dashboard.png)
+
 ---
 
 ## Quick Start
