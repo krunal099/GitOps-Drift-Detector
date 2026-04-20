@@ -1,0 +1,13 @@
+# compiled binary
+drift-detector
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Go test cache
+*.test

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-config
+  namespace: default
+data:
+  LOG_LEVEL: info
+  PORT: "8080"
+  FEATURE_FLAGS: "none"

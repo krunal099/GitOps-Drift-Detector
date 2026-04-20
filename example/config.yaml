@@ -1,0 +1,13 @@
+# drift-detector config file
+# All values here can be overridden by CLI flags.
+
+manifestsPath: ./example/manifests
+namespace: default
+intervalSeconds: 30
+dryRun: true
+remediate: false
+
+# Fields to exclude globally across all resources.
+# Typical use: replica counts managed by an HPA.
+globalIgnoreFields:
+  - spec.replicas

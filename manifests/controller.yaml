@@ -1,0 +1,131 @@
+# In-cluster deployment of the drift detector as a Kubernetes controller.
+# Apply this to the cluster where you want drift detection to run.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: drift-detector
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drift-detector
+  namespace: drift-detector
+
+---
+# ClusterRole: read access to all resources we track + ability to patch for remediation.
+# In a read-only / dry-run setup you'd remove the patch/update verbs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drift-detector
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io", "autoscaling"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+      - jobs
+      - cronjobs
+      - services
+      - configmaps
+      - secrets
+      - ingresses
+      - serviceaccounts
+      - persistentvolumeclaims
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drift-detector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drift-detector
+subjects:
+  - kind: ServiceAccount
+    name: drift-detector
+    namespace: drift-detector
+
+---
+# ConfigMap holds the detector configuration.
+# Mount the desired-state manifests via a git-sync sidecar or a separate volume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-detector-config
+  namespace: drift-detector
+data:
+  config.yaml: |
+    manifestsPath: /manifests
+    intervalSeconds: 60
+    dryRun: true
+    remediate: false
+    globalIgnoreFields:
+      - spec.replicas
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drift-detector
+  namespace: drift-detector
+spec:
+  replicas: 1  # single replica — no leader election needed for this scope
+  selector:
+    matchLabels:
+      app: drift-detector
+  template:
+    metadata:
+      labels:
+        app: drift-detector
+    spec:
+      serviceAccountName: drift-detector
+      containers:
+        - name: drift-detector
+          image: drift-detector:latest  # replace with your registry image
+          args:
+            - run
+            - --config=/etc/drift-detector/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/drift-detector
+            - name: manifests
+              mountPath: /manifests
+              readOnly: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+
+        # git-sync sidecar: keeps /manifests up to date with your Git repo.
+        # Replace GIT_SYNC_REPO with your actual repository.
+        - name: git-sync
+          image: registry.k8s.io/git-sync/git-sync:v4.1.0
+          env:
+            - name: GIT_SYNC_REPO
+              value: "https://github.com/YOUR_ORG/YOUR_GITOPS_REPO"
+            - name: GIT_SYNC_BRANCH
+              value: "main"
+            - name: GIT_SYNC_ROOT
+              value: "/manifests"
+            - name: GIT_SYNC_PERIOD
+              value: "30s"
+          volumeMounts:
+            - name: manifests
+              mountPath: /manifests
+
+      volumes:
+        - name: config
+          configMap:
+            name: drift-detector-config
+        - name: manifests
+          emptyDir: {}
